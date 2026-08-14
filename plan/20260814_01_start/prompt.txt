@@ -1,0 +1,30 @@
+du arbeitest im auftrag von wol pumba (wolpumba@gmail.com)
+quellcode findest du in /workspace/src
+
+Ich möchte ein python programm bauen um sterne in bildern von iphones zu lokalisieren. Im Ordner
+ /home/kiel/Downloads/Stars/ Sind einige Beispieldateien mit bildern im HEIC format.
+
+ nutze uv um python dependencies zu installieren. schreibe den python code so dass er explizit und uebersichtlich ist und leicht zu aendern und z.b. line by line ausfuehrbar. fuers erste moechte ich einen spike machen. schreibe z.b. die filenamen direkt in den quellcode. es muss/soll nicht viel abstrahiert werden.
+
+ schreibe den code auch so, dass ich ihn schnell durchlesen und verstehen kann.
+
+nutze tools um konsistenten und aufgeraeumten quellcode zu gewaehrleisten (z.b. ruff)
+
+
+Schaue dir den Quellcode an und die Architektur dieser Software. Nutze deepwiki mcp um dokumentation zu bekommen und fragen beantworten zu lassen. falls abhaengigkeiten eingefuehrt werden sind diese mitsamt ihrer github organisation in deps.md aufzuschreiben, so dass wir spaeter einfach die deepwiki abfragen konstruieren koennen.
+
+du befindest dich in einem docker container, basierend auf ubuntu. du darfst neue programme installieren, falls noetig.
+
+Schlage vor, wie wir dieses Feature implementieren können. Habe ich alle Requirements aufgelistet, die wichtig sind, oder kannst du dir vorstellen, dass noch andere Dinge werden sollen? Liste mir diese auf Vorschlägen, was man am besten umsetzen könnte.
+
+Schreibe einen Implementierungsplan. Dieser Implementierungsplan soll einen unabhängigen AI-Agenten dazu befähigen, selbstständig einen Kontext aufzubauen, der die wesentlichen
+quellen beinhaltet. Das heißt, der Implementierungsplan hat eine Liste von Dateien, die sich der Agent sich anschauen sollte, mit einer kurzen Beschreibung für jede Datei.
+Weiterhin soll der Implementierungsplan eine Erklärung Commit Messages sendet werden sollen. Und zwar sollen diese mit einer umfassenden Beschreibung und als Conventional Commit format ausgeführt werden.
+
+Neue Unit-Tests und Integration-Tests sollen wie erforderlich eingeführt werden.
+Diese sollen auch ausgeführt werden.
+
+schreibe task.md wo du die implementierungs und test schritte aufeinander abfolgen laesst, so dass ein agent die tasks seriell abarbeiten kann und die arbeit in jedem schritt getested und validiert wird.
+
+Nach der vollständigen Implementierung, wenn alle Tests abgeschlossen sind und alles committed ist, soll auch ein Walkthrough-Dokument entgeschrieben werden und
+in plan/2026.../walkthrough.md abgelegt werden. Dieses soll zusammenfassen, was wirklich implementiert wurde, welche Stellen aufgrund der Tests oder wie auch immer gemacht wurden, als im Untergrund auch Learnings und mögliche Erweiterungen. liste auch die neuen programme die mit in den docker container aufgenommen werden sollten
