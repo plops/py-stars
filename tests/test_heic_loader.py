@@ -1,4 +1,4 @@
-"""Tests for HEIC image loading."""
+import os
 
 import numpy as np
 import pytest
@@ -12,7 +12,12 @@ from py_stars.heic_loader import (
 )
 
 # Real HEIC file for integration tests
-TEST_HEIC_FILE = "/workspace/src/IMG_8556.HEIC"
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TEST_HEIC_FILE = (
+    os.path.join(PROJECT_ROOT, "data", "IMG_8867.HEIC")
+    if os.path.exists(os.path.join(PROJECT_ROOT, "data", "IMG_8867.HEIC"))
+    else "/workspace/src/IMG_8556.HEIC"
+)
 
 
 class TestLoadHeic:

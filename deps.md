@@ -6,7 +6,7 @@ Alle Abhängigkeiten mit GitHub-Organisation, damit deepwiki-Abfragen leicht kon
 |---|---|---|
 | pillow-heif | `bigcat88/pillow_heif` | HEIC/HEIF-Dateien lesen (iPhone-Fotos) |
 | Pillow | `python-pillow/Pillow` | Bildverarbeitung (PIL) |
-| tetra3 | `esa/tetra3` | Plate Solving – Sterne identifizieren, Kameraausrichtung bestimmen |
+| tetra3rs | `tetra3rs` / `esa/tetra3` | Plate Solving (Rust-accelerated with Gaia DR3) |
 | numpy | `numpy/numpy` | Numerische Arrays, Matrixoperationen |
 | scipy | `scipy/scipy` | Wissenschaftliches Rechnen (ndimage, optimize) |
 | opencv-python-headless | `opencv/opencv-python` | Bildverarbeitung (Blob-Erkennung, Filterung) |
