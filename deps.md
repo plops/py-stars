@@ -7,8 +7,10 @@ Alle Abhängigkeiten mit GitHub-Organisation, damit deepwiki-Abfragen leicht kon
 | pillow-heif | `bigcat88/pillow_heif` | HEIC/HEIF-Dateien lesen (iPhone-Fotos) |
 | Pillow | `python-pillow/Pillow` | Bildverarbeitung (PIL) |
 | tetra3rs | `tetra3rs` / `esa/tetra3` | Plate Solving (Rust-accelerated with Gaia DR3) |
+| skyfield | `skyfielders/python-skyfield` | Ephemeriden für Planeten, Mond, Sonne & Satellitenbahnen |
+| sgp4 | `brandon-rhodes/python-sgp4` | SGP4-Bahnorbitpropagator für Satelliten (TLEs) |
 | numpy | `numpy/numpy` | Numerische Arrays, Matrixoperationen |
-| scipy | `scipy/scipy` | Wissenschaftliches Rechnen (ndimage, optimize) |
+| scipy | `scipy/scipy` | Wissenschaftliches Rechnen (ndimage, optimize, spatial) |
 | opencv-python-headless | `opencv/opencv-python` | Bildverarbeitung (Blob-Erkennung, Filterung) |
 | matplotlib | `matplotlib/matplotlib` | Visualisierung der Ergebnisse |
 | pytest | `pytest-dev/pytest` | Unit- und Integration-Tests |
@@ -28,5 +30,6 @@ Alle Abhängigkeiten mit GitHub-Organisation, damit deepwiki-Abfragen leicht kon
 # Beispiele für deepwiki-Abfragen:
 # deepwiki ask_question repo="bigcat88/pillow_heif" question="How to read HEIC files?"
 # deepwiki ask_question repo="esa/tetra3" question="How to generate a custom database for wide FOV?"
+# deepwiki ask_question repo="skyfielders/python-skyfield" question="How to calculate apparent topocentric positions of planets and satellites?"
 # deepwiki ask_question repo="opencv/opencv-python" question="How to detect blobs in images?"
 ```

@@ -470,3 +470,270 @@ def plot_cross_match_diagnostics(
     plt.savefig(output_path, facecolor=fig.get_facecolor(), edgecolor="none")
     plt.close(fig)
     print(f"Saved diagnostic visualization: {output_path}")
+
+
+def plot_ephemeris_and_dso_overlay(
+    image: np.ndarray,
+    solve_result: Any,
+    planets: list[Any] | None = None,
+    dsos: list[Any] | None = None,
+    satellites: list[Any] | None = None,
+    centroids: list[Any] | None = None,
+    output_path: str = "",
+    title: str = "Planets, Deep Sky Objects & Satellites Overlay",
+) -> None:
+    """Generate high-contrast annotated overlay showing Planets, DSOs, and Satellites in the FOV.
+
+    Args:
+        image: Grayscale numpy image array.
+        solve_result: Solved SolveResult object.
+        planets: List of SolarSystemBodyPosition objects in the FOV.
+        dsos: List of ProjectedDSO objects in the FOV.
+        satellites: List of SatellitePass objects in the FOV.
+        centroids: List of detected star centroids.
+        output_path: Filepath for the generated PNG.
+        title: Header title.
+    """
+    fig, ax = plt.subplots(1, 1, figsize=(16, 12), dpi=150)
+    fig.patch.set_facecolor("#0b0f19")
+    ax.set_facecolor("#000000")
+
+    h, w = image.shape[:2]
+    cx, cy = w / 2.0, h / 2.0
+
+    # Display base image
+    ax.imshow(image, cmap="gray", origin="upper", extent=[0, w, h, 0], vmin=0, vmax=255)
+
+    # 1. Overlay detected stars (subtle green dots)
+    if centroids:
+        for c in centroids:
+            px = c.x + cx
+            py = c.y + cy
+            circle = plt.Circle(
+                (px, py), radius=4, fill=False, color="#2ed573", linewidth=0.8, alpha=0.5
+            )
+            ax.add_patch(circle)
+
+    # 2. Overlay Deep Sky Objects (Galaxies: purple, Nebulae: cyan, Clusters: yellow)
+    if dsos:
+        for p_dso in dsos:
+            dso = p_dso.dso
+            img_x = p_dso.image_x
+            img_y = p_dso.image_y
+            r_px = max(12.0, p_dso.major_axis_px / 2.0)
+
+            # Color and styling by DSO type
+            if "Galaxy" in dso.obj_type:
+                edge_color = "#e056fd"  # Magenta/Purple
+                style = "-"
+            elif "Nebula" in dso.obj_type or "Remnant" in dso.obj_type:
+                edge_color = "#00d2d3"  # Cyan/Teal
+                style = "--"
+            else:  # Cluster / Star Cloud
+                edge_color = "#feca57"  # Gold
+                style = ":"
+
+            # Bounding ellipse / circle
+            circle = plt.Circle(
+                (img_x, img_y),
+                radius=r_px,
+                fill=False,
+                edgecolor=edge_color,
+                linestyle=style,
+                linewidth=1.8,
+                alpha=0.9,
+            )
+            ax.add_patch(circle)
+
+            # Label
+            label_name = f"{dso.id} {dso.name}".strip()
+            label_text = f"{label_name}\n({dso.obj_type}, {dso.magnitude:.1f} mag)"
+            ax.text(
+                img_x + r_px + 8,
+                img_y,
+                label_text,
+                color=edge_color,
+                fontsize=9,
+                fontweight="bold",
+                verticalalignment="center",
+                bbox=dict(
+                    boxstyle="round,pad=0.2",
+                    facecolor="#0b0f19",
+                    alpha=0.75,
+                    edgecolor=edge_color,
+                    lw=0.8,
+                ),
+            )
+
+    # 3. Overlay Planets & Moon (Bright orange/yellow markers with phase & size info)
+    if planets:
+        for p in planets:
+            if p.image_x is None or p.image_y is None:
+                continue
+            img_x = p.image_x
+            img_y = p.image_y
+
+            # Outer ring
+            ring = plt.Circle(
+                (img_x, img_y),
+                radius=18,
+                fill=False,
+                edgecolor="#ff9f43",
+                linewidth=2.2,
+                alpha=0.95,
+            )
+            ax.add_patch(ring)
+            # Center target crosshair
+            ax.plot([img_x - 24, img_x + 24], [img_y, img_y], color="#ff9f43", lw=1.2)
+            ax.plot([img_x, img_x], [img_y - 24, img_y + 24], color="#ff9f43", lw=1.2)
+
+            mag_str = (
+                f", {p.estimated_magnitude:+.1f} mag" if p.estimated_magnitude is not None else ""
+            )
+            phase_str = (
+                f", {p.phase_fraction * 100.0:.0f}% lit" if p.phase_fraction is not None else ""
+            )
+            p_label = f"★ {p.name.upper()}{mag_str}{phase_str}\nRA {p.ra_hms}, Dec {p.dec_dms}"
+
+            ax.text(
+                img_x + 28,
+                img_y - 10,
+                p_label,
+                color="#ff9f43",
+                fontsize=10,
+                fontweight="bold",
+                verticalalignment="center",
+                bbox=dict(
+                    boxstyle="round,pad=0.3",
+                    facecolor="#0b0f19",
+                    alpha=0.85,
+                    edgecolor="#ff9f43",
+                    lw=1.2,
+                ),
+            )
+
+    # 4. Overlay Satellites (Streak trajectory with directional arrow & ID)
+    if satellites:
+        for sat in satellites:
+            pts = [
+                (wp.image_x, wp.image_y)
+                for wp in sat.waypoints
+                if wp.image_x is not None and wp.image_y is not None
+            ]
+            if not pts:
+                continue
+
+            xs = [pt[0] for pt in pts]
+            ys = [pt[1] for pt in pts]
+
+            if len(pts) > 1:
+                # Plot streak line
+                ax.plot(xs, ys, color="#ff4757", linewidth=2.5, linestyle="-", alpha=0.9)
+                # Direction arrow
+                mid_i = len(pts) // 2
+                dx = pts[-1][0] - pts[0][0]
+                dy = pts[-1][1] - pts[0][1]
+                if math.hypot(dx, dy) > 5.0:
+                    ax.annotate(
+                        "",
+                        xy=(pts[-1][0], pts[-1][1]),
+                        xytext=(pts[mid_i][0], pts[mid_i][1]),
+                        arrowprops=dict(arrowstyle="->", color="#ff4757", lw=2.5),
+                    )
+            else:
+                # Single snapshot dot
+                ax.plot(xs[0], ys[0], marker="^", color="#ff4757", markersize=10)
+
+            # Label at start point
+            label_x = xs[0]
+            label_y = ys[0]
+            sat_text = (
+                f"🛰 {sat.name} [NORAD #{sat.norad_cat_id}]\n"
+                f"Alt: {sat.mid_alt_deg:.1f}°, Range: {sat.mid_range_km:.0f}km"
+            )
+            ax.text(
+                label_x - 10,
+                label_y - 15,
+                sat_text,
+                color="#ff6b81",
+                fontsize=9,
+                fontweight="bold",
+                horizontalalignment="right",
+                bbox=dict(
+                    boxstyle="round,pad=0.2",
+                    facecolor="#0b0f19",
+                    alpha=0.8,
+                    edgecolor="#ff4757",
+                    lw=1.0,
+                ),
+            )
+
+    ax.set_xlim(0, w)
+    ax.set_ylim(h, 0)
+    ax.set_title(title, color="#ffffff", fontsize=15, fontweight="bold", pad=15)
+    ax.set_xlabel("Sensor X (pixels)", color="#e0e6ed", fontsize=10)
+    ax.set_ylabel("Sensor Y (pixels)", color="#e0e6ed", fontsize=10)
+    ax.tick_params(colors="#a0aec0")
+
+    # Legend handles
+    legend_elements = [
+        plt.Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            label="Detected Star",
+            markerfacecolor="#2ed573",
+            markersize=6,
+        ),
+        plt.Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            label="Planet / Moon",
+            markerfacecolor="#ff9f43",
+            markersize=9,
+        ),
+        plt.Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            label="Galaxy (DSO)",
+            markerfacecolor="#e056fd",
+            markersize=8,
+        ),
+        plt.Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            label="Nebula (DSO)",
+            markerfacecolor="#00d2d3",
+            markersize=8,
+        ),
+        plt.Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            label="Star Cluster (DSO)",
+            markerfacecolor="#feca57",
+            markersize=8,
+        ),
+        plt.Line2D([0], [0], color="#ff4757", lw=2, label="Satellite Track"),
+    ]
+    ax.legend(
+        handles=legend_elements,
+        facecolor="#0f141d",
+        edgecolor="#2d3748",
+        labelcolor="#e0e6ed",
+        fontsize=9,
+        loc="upper right",
+    )
+
+    plt.tight_layout()
+    plt.savefig(output_path, facecolor=fig.get_facecolor(), edgecolor="none")
+    plt.close(fig)
+    print(f"Saved ephemeris & DSO overlay: {output_path}")

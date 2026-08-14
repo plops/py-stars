@@ -12,8 +12,21 @@ import numpy as np
 import tetra3rs
 
 from py_stars.calibration import get_default_camera_model
+from py_stars.dso import ProjectedDSO, project_dsos_to_image
+from py_stars.ephemeris import (
+    EphemerisObservationResult,
+    SolarSystemBodyPosition,
+    query_solar_system_ephemerides,
+)
 from py_stars.exif import compute_camera_fov, get_gps_info, parse_exif
 from py_stars.heic_loader import load_heic_as_uint8
+from py_stars.satellites import (
+    SatelliteMatchResult,
+    download_tle_group,
+    match_satellites_with_centroids,
+    parse_tle_data,
+    query_satellites_in_fov,
+)
 from py_stars.star_detector import extract_centroids_tetra3
 from py_stars.star_matching import CrossMatchResult, cross_match_stars
 
@@ -158,6 +171,11 @@ def solve_heic_photo(
     use_distortion_correction: bool = True,
     distortion_model_type: str = "radial",
     apply_atmospheric_refraction: bool = True,
+    query_ephemeris: bool = True,
+    query_dso: bool = True,
+    query_satellites: bool = False,
+    satellite_tle_source: str | None = None,
+    exposure_seconds: float | None = None,
     max_centroids: int = 100,
     sigma_threshold: float = 10.0,
     max_match_radius_px: float = 12.0,
@@ -167,7 +185,7 @@ def solve_heic_photo(
     """Complete end-to-end processing of a HEIC star photo.
 
     Steps:
-    1. Parse EXIF: focal length, dynamic FOV, GPS coordinates, timestamp, compass.
+    1. Parse EXIF: focal length, dynamic FOV, GPS coordinates, timestamp, compass, exposure.
     2. Load image as grayscale uint8.
     3. Extract star centroids with sub-pixel fitting.
     4. Apply camera distortion model (radial/polynomial) if requested.
@@ -175,6 +193,9 @@ def solve_heic_photo(
     6. Cross-match all catalog stars in FOV against image centroids.
     7. Apply atmospheric refraction correction using observer altitude & temperature.
     8. Perform limiting magnitude & detection completeness analysis.
+    9. Query ephemerides for planets & Moon at the exact GPS & UTC timestamp.
+    10. Query deep sky objects (Messier & NGC nebulae/galaxies/clusters) in image FOV.
+    11. Query and propagate satellites (SGP4) and correlate with image detections.
 
     Args:
         filepath: Path to the HEIC photo.
@@ -183,13 +204,21 @@ def solve_heic_photo(
         use_distortion_correction: If True and camera_model is None, loads default model.
         distortion_model_type: "radial" or "polynomial".
         apply_atmospheric_refraction: If True, corrects for atmosphere when GPS is present.
+        query_ephemeris: If True, queries topocentric planet & moon positions.
+        query_dso: If True, projects visible Messier & NGC deep sky objects.
+        query_satellites: If True, propagates satellite orbits and correlates detections.
+        satellite_tle_source: TLE group ('visual', 'stations', 'starlink', 'active') or file path.
+        exposure_seconds: Optional exposure duration override in seconds.
         max_centroids: Maximum centroids to extract (default 100).
         sigma_threshold: Centroid detection threshold above background sigma.
         max_match_radius_px: Radius in pixels for catalog cross-matching.
+        roi: Optional (ymin, ymax, xmin, xmax) bounding box.
+        auto_sky_crop: If True, falls back to upper sky crop on initial solve failure.
 
     Returns:
         Dict with keys: filepath, exif, gps_info, computed_fov, centroids,
-        solve_result, cross_match_result, camera_model.
+        solve_result, cross_match_result, camera_model, ephemeris_result,
+        planets_in_fov, dsos_in_fov, satellite_result, satellite_matches.
     """
     if db is None:
         db = get_or_create_database()
@@ -260,6 +289,89 @@ def solve_heic_photo(
             apply_refraction=apply_atmospheric_refraction,
         )
 
+    # 9. Query Ephemerides (Planets, Moon, Sun)
+    ephemeris_res: EphemerisObservationResult | None = None
+    planets_in_fov: list[SolarSystemBodyPosition] = []
+    if (
+        query_ephemeris
+        and gps_info
+        and gps_info.get("latitude_deg") is not None
+        and gps_info.get("utc_datetime") is not None
+    ):
+        try:
+            ephemeris_res = query_solar_system_ephemerides(
+                utc_dt=gps_info["utc_datetime"],
+                lat_deg=gps_info["latitude_deg"],
+                lon_deg=gps_info["longitude_deg"],
+                alt_m=gps_info.get("altitude_m", 0.0),
+                solve_result=solve_result if solve_result else None,
+                image_width=w,
+                image_height=h,
+            )
+            planets_in_fov = ephemeris_res.bodies_in_fov
+        except Exception as e:
+            print(f"Notice: Could not query solar system ephemerides: {e}")
+
+    # 10. Query Deep Sky Objects (Messier & NGC)
+    dsos_in_fov: list[ProjectedDSO] = []
+    if query_dso and solve_result:
+        try:
+            dsos_in_fov = project_dsos_to_image(
+                solve_result=solve_result,
+                image_width=w,
+                image_height=h,
+            )
+        except Exception as e:
+            print(f"Notice: Could not query DSO catalog: {e}")
+
+    # 11. Query Satellites (TLE / SGP4)
+    satellite_res: SatelliteMatchResult | None = None
+    satellite_matches = []
+    if (
+        query_satellites
+        and gps_info
+        and gps_info.get("latitude_deg") is not None
+        and gps_info.get("utc_datetime") is not None
+        and solve_result
+    ):
+        try:
+            # Determine exposure time
+            exp_time = exposure_seconds
+            if exp_time is None:
+                exif_sub = exif.get("Exif", {})
+                raw_exp = exif_sub.get("ExposureTime") or exif.get("ExposureTime")
+                if raw_exp is not None:
+                    exp_time = float(raw_exp)
+                else:
+                    exp_time = 1.0  # default 1s
+
+            # Load TLEs
+            tle_src = satellite_tle_source or "visual"
+            tle_path = download_tle_group(group=tle_src)
+            sats = parse_tle_data(tle_path)
+
+            satellite_res = query_satellites_in_fov(
+                satellites=sats,
+                lat_deg=gps_info["latitude_deg"],
+                lon_deg=gps_info["longitude_deg"],
+                alt_m=gps_info.get("altitude_m", 0.0),
+                utc_dt=gps_info["utc_datetime"],
+                solve_result=solve_result,
+                image_width=w,
+                image_height=h,
+                exposure_seconds=exp_time,
+            )
+            satellite_matches = match_satellites_with_centroids(
+                satellite_passes=satellite_res.passes,
+                centroids=centroids,
+                image_width=w,
+                image_height=h,
+                solve_result=solve_result,
+            )
+            satellite_res.matches = satellite_matches
+        except Exception as e:
+            print(f"Notice: Could not query satellites: {e}")
+
     return {
         "filepath": filepath,
         "image_shape": (h, w),
@@ -276,6 +388,11 @@ def solve_heic_photo(
         "solve_result": solve_result,
         "cross_match_result": cross_match,
         "camera_model": model_to_use,
+        "ephemeris_result": ephemeris_res,
+        "planets_in_fov": planets_in_fov,
+        "dsos_in_fov": dsos_in_fov,
+        "satellite_result": satellite_res,
+        "satellite_matches": satellite_matches,
     }
 
 
